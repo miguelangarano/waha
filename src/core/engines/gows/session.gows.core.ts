@@ -1127,12 +1127,71 @@ export class WhatsappSessionGoWSCore extends WhatsappSession {
     throw new NotImplementedByEngineError();
   }
 
-  sendImage(request: MessageImageRequest) {
-    throw new AvailableInPlusVersion();
+  @Activity()
+  async sendImage(request: MessageImageRequest) {
+    const jid = normalizeJid(toJID(this.ensureSuffix(request.chatId)));
+    const media = await this.fileToMedia(
+      request.file,
+      messages.MediaType.IMAGE,
+      'image/jpeg',
+    );
+    const message = new messages.MessageRequest({
+      jid: jid,
+      text: request.caption || '',
+      session: this.session,
+      media: media,
+      replyTo: getMessageIdFromSerialized(request.reply_to),
+      mentions: request.mentions?.map((mention) =>
+        normalizeJid(toJID(mention)),
+      ),
+    });
+    const response = await promisify(this.client.SendMessage)(message);
+    const data = response.toObject();
+    return this.messageResponse(jid, data);
   }
 
-  sendFile(request: MessageFileRequest) {
-    throw new AvailableInPlusVersion();
+  @Activity()
+  async sendFile(request: MessageFileRequest) {
+    const jid = normalizeJid(toJID(this.ensureSuffix(request.chatId)));
+    const media = await this.fileToMedia(
+      request.file,
+      messages.MediaType.DOCUMENT,
+      'application/octet-stream',
+    );
+    const message = new messages.MessageRequest({
+      jid: jid,
+      text: request.caption || '',
+      session: this.session,
+      media: media,
+      replyTo: getMessageIdFromSerialized(request.reply_to),
+      mentions: request.mentions?.map((mention) =>
+        normalizeJid(toJID(mention)),
+      ),
+    });
+    const response = await promisify(this.client.SendMessage)(message);
+    const data = response.toObject();
+    return this.messageResponse(jid, data);
+  }
+
+  protected async fileToMedia(
+    file: BinaryFile | RemoteFile,
+    type: messages.MediaType,
+    defaultMimetype: string,
+  ): Promise<messages.Media> {
+    const content = await this.fileToBuffer(file);
+    return new messages.Media({
+      content: content,
+      type: type,
+      mimetype: file.mimetype || defaultMimetype,
+      filename: file.filename || '',
+    });
+  }
+
+  protected async fileToBuffer(file: BinaryFile | RemoteFile): Promise<Buffer> {
+    if ('url' in file) {
+      return this.fetch(file.url);
+    }
+    return Buffer.from(file.data, 'base64');
   }
 
   sendVoice(request: MessageVoiceRequest) {
